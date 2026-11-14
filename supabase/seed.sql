@@ -1,0 +1,2 @@
+-- Seed data for local development.
+-- Add INSERT statements here if you need default rows after `supabase db reset`.
