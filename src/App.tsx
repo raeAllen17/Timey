@@ -10,8 +10,9 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
-        <p className="text-gray-400">Loading...</p>
+      <div className="loading">
+        <span className="brand-mark" aria-hidden="true" />
+        <p>Loading your sessions</p>
       </div>
     );
   }
@@ -21,33 +22,37 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col">
-      <header className="flex items-center justify-between px-4 py-3 border-b border-gray-800">
-        <h1 className="text-lg font-bold">Timey</h1>
-        <button
-          onClick={signOut}
-          className="text-sm text-gray-400 hover:text-white transition-colors"
-        >
-          Sign Out
+    <div className="app">
+      <header className="topbar">
+        <div className="brand">
+          <span className="brand-mark" aria-hidden="true" />
+          <span className="brand-name">Timey</span>
+        </div>
+        <button type="button" className="signout" onClick={signOut}>
+          Sign out
         </button>
       </header>
 
       <Timer />
 
-      <div className="border-t border-gray-800">
+      <section className={`history${showHistory ? ' is-open' : ''}`}>
         <button
-          onClick={() => setShowHistory(!showHistory)}
-          className="w-full px-4 py-3 text-sm text-gray-400 hover:text-white hover:bg-gray-800 transition-colors text-center"
+          type="button"
+          className="history-toggle"
+          aria-expanded={showHistory}
+          aria-controls="session-history"
+          onClick={() => setShowHistory((open) => !open)}
         >
-          {showHistory ? 'Hide History' : 'Show History'}
+          <span>History</span>
+          <span className="history-meta">{showHistory ? 'Close' : 'Open'}</span>
         </button>
 
         {showHistory && (
-          <div className="px-4 pb-4 max-h-64 overflow-y-auto">
+          <div className="history-scroll" id="session-history">
             <SessionHistory />
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
