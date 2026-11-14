@@ -31,7 +31,7 @@
 | **Timer Controls** | Play, Pause, Resume, and Stop with a live countdown display |
 | **Goal Tracking** | Users define a text goal for each session (e.g. "Review Pull Requests") |
 | **Session Logging** | Completed and manually stopped sessions are saved to Supabase PostgreSQL |
-| **History View** | Collapsible list of past sessions, ordered by most recent |
+| **History View** | Full-height list of past sessions, ordered by most recent |
 | **System Tray** | App minimizes to the system tray instead of closing |
 | **Native Notifications** | OS-level notification fires when a session reaches 00:00 |
 
@@ -54,7 +54,7 @@
 | Database | **Supabase (PostgreSQL)** | Hosted PostgreSQL with automatic REST API |
 | Authentication | **Supabase Auth** | Email/password auth with JWT-based sessions |
 | Data Security | **Supabase RLS** | Row Level Security ensures users can only access their own data |
-| Styling | **Tailwind CSS 4** | Utility-first CSS framework |
+| Styling | **Tailwind CSS 4** | Utility layer plus custom design tokens and app styles |
 | Language | **TypeScript 6** | Type-safe JavaScript with strict mode enabled |
 | Package Manager | **npm** | Dependency management |
 
@@ -67,8 +67,12 @@ timey/
 ├── docs/
 │   └── MVP_PHASE1.md          # This documentation file
 ├── electron/
-│   └── main.ts                # Electron main process (window, tray, notifications)
-├── public/                    # Static assets (icon.png)
+│   ├── main.ts                # Electron main process (window, tray, notifications)
+│   ├── preload.ts             # Exposes the notify bridge to the renderer
+│   ├── main.cjs               # Compiled main process (generated, not committed)
+│   └── preload.cjs            # Compiled preload script (generated, not committed)
+├── public/
+│   └── icon.png               # Tray icon
 ├── src/
 │   ├── components/
 │   │   ├── Auth.tsx           # Login/Signup form component
@@ -81,19 +85,19 @@ timey/
 │   ├── types/
 │   │   └── index.ts           # TypeScript interfaces (Session, TimerState)
 │   ├── App.tsx                # Root component — auth gate + layout
-│   ├── main.tsx               # React entry point — wraps App in AuthProvider
-│   ├── index.css              # Global styles (Tailwind import)
+│   ├── main.tsx               # React entry point — auth gate or setup notice
+│   ├── index.css              # Tailwind import, design tokens, and app styles
 │   └── vite-env.d.ts          # Environment variable + window.electron type declarations
 ├── supabase/
 │   ├── config.toml            # Supabase CLI configuration
+│   ├── seed.sql               # Local seed data
 │   └── migrations/
 │       └── 20260712000000_create_sessions_table.sql
+├── .env.example               # Supabase environment template
 ├── .env.local                 # Supabase URL and anon key (not committed)
 ├── package.json               # Dependencies and scripts
 ├── tsconfig.json              # TypeScript compiler options
-├── vite.config.ts             # Vite build config with @ path alias
-├── tailwind.config.js         # Tailwind CSS configuration
-├── postcss.config.js          # PostCSS configuration
+├── vite.config.ts             # Vite config (React, Tailwind, @ path alias)
 ├── eslint.config.js           # ESLint configuration
 ├── index.html                 # Vite HTML entry point
 └── PRD.md                     # Product Requirements Document
@@ -113,7 +117,7 @@ Electron launches
     │
     └─ React app boots
          │
-         └─ main.tsx → renders <AuthProvider> → <App />
+         └─ main.tsx → renders <Setup /> if env vars are missing, otherwise <AuthProvider> → <App />
               │
               └─ AuthProvider runs useEffect:
                    ├─ supabase.auth.getSession() → checks for existing JWT
@@ -159,7 +163,7 @@ RUNNING STATE
     │
     ├─ useEffect triggers setInterval (1 second tick)
     │       ├─ Each tick: secondsLeft -= 1
-    │       ├─ Progress bar updates: ((total - left) / total) * 100
+    │       ├─ Ring progress updates: ((total - left) / total) * 100
     │       │
     │       ├─ secondsLeft > 1 → continues counting
     │       │
@@ -381,7 +385,7 @@ Custom hook that consumes the context. Throws an error if used outside `<AuthPro
 6. Sets `loading = false`.
 
 **Rendering:**
-- Full-screen centered layout with dark theme.
+- Paper-toned layout with the Bricolage Grotesque and Newsreader type pairing.
 - Email input (type="email", required).
 - Password input (type="password", required, minLength=6).
 - Submit button shows "Loading..." while waiting, otherwise "Sign In" or "Sign Up".
@@ -452,14 +456,14 @@ Converts total seconds to `MM:SS` format with zero-padding. Used for all countdo
 - Cleanup function clears the interval on unmount or state change.
 
 **`progress`:**
-Calculated as `((totalSeconds - secondsLeft) / totalSeconds) * 100`. Drives the progress bar width.
+Calculated as `((totalSeconds - secondsLeft) / totalSeconds) * 100`. Drives the conic-gradient ring on the timer dial.
 
 #### Rendered Views (conditional on `state`)
 
 | State | What Renders |
 |---|---|
 | `idle` | Goal input, duration input, large Play button |
-| `running` | Goal label, `MM:SS` countdown, progress bar, Pause + Stop buttons |
+| `running` | Goal label, `MM:SS` countdown, progress ring, Pause + Stop buttons |
 | `paused` | Goal label + "Paused", yellow `MM:SS`, Resume + Stop buttons |
 | `completed` | Celebration message, goal name, total time, "New Session" button |
 
@@ -492,7 +496,7 @@ Converts ISO timestamp to a localized short format: `"Jul 12, 2:30 PM"`.
 **Rendering:**
 - Loading state → "Loading history..." message
 - Empty state → "No sessions yet. Start your first one!"
-- Sessions list → Each session as a card showing:
+- Sessions list → Each session as a ledger row showing:
   - Left side: goal text (truncated) + formatted date
   - Right side: duration + status badge (green "Completed" or yellow "Stopped")
 
@@ -512,8 +516,8 @@ Converts ISO timestamp to a localized short format: `"Jul 12, 2:30 PM"`.
 4. If `user` exists → shows the main app:
    - **Header:** App name + Sign Out button
    - **Timer:** `<Timer />` component (takes up remaining space)
-   - **History toggle:** Button at the bottom that shows/hides `<SessionHistory />`
-   - **History panel:** Scrollable container (max 256px height) that appears when toggled
+   - **History toggle:** Button at the bottom that opens the history view
+   - **History view:** Full-height panel below the topbar with a scrollable ledger of sessions
 
 ---
 
@@ -522,16 +526,21 @@ Converts ISO timestamp to a localized short format: `"Jul 12, 2:30 PM"`.
 ```typescript
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    {isSupabaseConfigured ? (
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    ) : (
+      <Setup />
+    )}
   </React.StrictMode>
 );
 ```
 
 - Wraps the app in `React.StrictMode` for development warnings.
+- Renders `<Setup />` with copy-ready env instructions when Supabase credentials are missing.
 - Wraps in `AuthProvider` so all components can access auth state.
-- Imports `index.css` which loads Tailwind CSS.
+- Imports `index.css` which loads Tailwind CSS and the design tokens.
 
 ---
 
@@ -549,7 +558,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
 #### `createWindow()`
 - Creates a fixed-size window (400x600, non-resizable).
-- Sets `nodeIntegration: false` and `contextIsolation: true` for security.
+- Sets `nodeIntegration: false` and `contextIsolation: true` for security, and loads `electron/preload.cjs` to expose the notification bridge.
 - In dev mode: loads `http://localhost:5173` (Vite dev server) and opens DevTools.
 - In production: loads the built `dist/index.html`.
 - Waits for `ready-to-show` before displaying (prevents white flash).
@@ -563,7 +572,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
 #### `showNotification(title, body)`
 - Creates and shows an Electron `Notification`.
-- Exported for use from the renderer process (via preload script, not yet implemented — currently the React app uses the browser Notification API fallback).
+- Invoked through the `timey:notify` IPC channel exposed by `electron/preload.ts`.
 
 #### App Lifecycle
 - `app.whenReady()` → creates window and tray.
