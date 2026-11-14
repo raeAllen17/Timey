@@ -14,6 +14,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['dist', 'node_modules', 'electron/dist'],
+    ignores: ['dist', 'node_modules', 'release', 'electron/*.cjs', 'electron/*.js'],
   }
 );
