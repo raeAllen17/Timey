@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { useAuth } from '@/context/AuthContext';
 
 export default function Auth() {
@@ -9,8 +10,8 @@ export default function Auth() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setError('');
     setLoading(true);
 
@@ -25,64 +26,70 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
-      <div className="w-full max-w-sm">
-        <h1 className="text-3xl font-bold text-white text-center mb-8">Timey</h1>
+    <div className="auth">
+      <header className="auth-head">
+        <span className="brand-mark" aria-hidden="true" />
+        <span className="brand-name">Timey</span>
+      </header>
 
-        <form onSubmit={handleSubmit} className="bg-gray-800 rounded-lg p-6 space-y-4">
-          <h2 className="text-xl font-semibold text-white text-center">
-            {isSignUp ? 'Create Account' : 'Sign In'}
-          </h2>
+      <div className="auth-body">
+        <h1 className="auth-title">Make the time count.</h1>
+        <p className="auth-lede">
+          {isSignUp
+            ? 'Create an account to keep every focus session in one place.'
+            : 'Sign in to pick up where your focus left off.'}
+        </p>
 
+        <form className="auth-form" onSubmit={handleSubmit}>
           {error && (
-            <div className="bg-red-500/20 border border-red-500/50 text-red-300 text-sm rounded px-3 py-2">
+            <p className="auth-error" role="alert">
               {error}
-            </div>
+            </p>
           )}
 
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Email</label>
+          <label className="field">
+            <span className="field-label">Email</span>
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(event) => setEmail(event.target.value)}
+              autoComplete="email"
               required
-              className="w-full bg-gray-700 text-white rounded px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
             />
-          </div>
+          </label>
 
-          <div>
-            <label className="block text-sm text-gray-400 mb-1">Password</label>
+          <label className="field">
+            <span className="field-label">Password</span>
             <input
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete={isSignUp ? 'new-password' : 'current-password'}
               required
               minLength={6}
-              className="w-full bg-gray-700 text-white rounded px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
             />
-          </div>
+          </label>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded py-2 transition-colors"
-          >
-            {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
+          <button className="start-btn" type="submit" disabled={loading}>
+            {loading ? 'One moment' : isSignUp ? 'Create account' : 'Sign in'}
           </button>
 
-          <p className="text-center text-sm text-gray-400">
-            {isSignUp ? 'Already have an account?' : "Don't have an account?"}{' '}
+          <p className="auth-switch">
+            {isSignUp ? 'Already have an account?' : 'New to Timey?'}{' '}
             <button
               type="button"
-              onClick={() => { setIsSignUp(!isSignUp); setError(''); }}
-              className="text-blue-400 hover:text-blue-300"
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setError('');
+              }}
             >
-              {isSignUp ? 'Sign In' : 'Sign Up'}
+              {isSignUp ? 'Sign in' : 'Create one'}
             </button>
           </p>
         </form>
       </div>
+
+      <footer className="auth-foot">A quiet timer for focused work.</footer>
     </div>
   );
 }

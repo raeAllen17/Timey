@@ -1,11 +1,19 @@
-import { app, BrowserWindow, Tray, Menu, Notification, nativeImage } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  Tray,
+  Menu,
+  Notification,
+  nativeImage,
+  ipcMain,
+} from 'electron';
 import path from 'path';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
 
-const isDev = process.env.NODE_ENV;
+const isDev = !app.isPackaged;
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -15,9 +23,12 @@ function createWindow(): void {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      preload: path.join(__dirname, 'preload.cjs'),
     },
     title: 'Timey',
     show: false,
+    autoHideMenuBar: true,
+    backgroundColor: '#f2f2ec',
   });
 
   if (isDev) {
@@ -40,7 +51,9 @@ function createWindow(): void {
 }
 
 function createTray(): void {
-  const iconPath = path.join(__dirname, '../public/icon.png');
+  const iconPath = app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.png')
+    : path.join(__dirname, '../public/icon.png');
   const icon = nativeImage.createFromPath(iconPath);
   tray = new Tray(icon);
 
@@ -70,7 +83,12 @@ export function showNotification(title: string, body: string): void {
   new Notification({ title, body }).show();
 }
 
+ipcMain.on('timey:notify', (_event, payload: { title: string; body: string }) => {
+  showNotification(payload.title, payload.body);
+});
+
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
   createWindow();
   createTray();
 

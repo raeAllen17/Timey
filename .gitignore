@@ -1,6 +1,12 @@
 node_modules
 dist
+release
+electron/main.cjs
+electron/main.cjs.map
+electron/preload.cjs
+electron/preload.cjs.map
 .env
 .env.local
+supabase/.temp
 *.log
 .DS_Store

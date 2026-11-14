@@ -1,7 +1,14 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { CSSProperties, ChangeEvent, FormEvent } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import type { TimerState } from '@/types';
+
+const MIN_MINUTES = 1;
+const MAX_MINUTES = 180;
+
+const clampMinutes = (value: number) =>
+  Math.min(MAX_MINUTES, Math.max(MIN_MINUTES, value));
 
 export default function Timer() {
   const { user } = useAuth();
@@ -20,16 +27,19 @@ export default function Timer() {
     return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   };
 
-  const saveSession = useCallback(async (actualDuration: number, completed: boolean) => {
-    if (!user) return;
-    await supabase.from('sessions').insert({
-      user_id: user.id,
-      goal: goal || 'Untitled session',
-      planned_duration: totalSeconds,
-      actual_duration: actualDuration,
-      completed,
-    });
-  }, [user, goal, totalSeconds]);
+  const saveSession = useCallback(
+    async (actualDuration: number, completed: boolean) => {
+      if (!user) return;
+      await supabase.from('sessions').insert({
+        user_id: user.id,
+        goal: goal || 'Untitled session',
+        planned_duration: totalSeconds,
+        actual_duration: actualDuration,
+        completed,
+      });
+    },
+    [user, goal, totalSeconds],
+  );
 
   useEffect(() => {
     if (state !== 'running') return;
@@ -43,7 +53,7 @@ export default function Timer() {
           setState('completed');
 
           if (window.electron) {
-            window.electron.notify('Time\'s up!', `Goal: ${goal || 'Untitled session'}`);
+            window.electron.notify("Time's up!", `Goal: ${goal || 'Untitled session'}`);
           } else {
             new Notification("Time's up!", { body: `Goal: ${goal || 'Untitled session'}` });
           }
@@ -58,8 +68,9 @@ export default function Timer() {
     };
   }, [state, totalSeconds, goal, saveSession]);
 
-  const handleStart = () => {
-    const secs = inputMinutes * 60;
+  const handleStart = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const secs = clampMinutes(inputMinutes) * 60;
     setTotalSeconds(secs);
     setSecondsLeft(secs);
     setState('running');
@@ -95,128 +106,134 @@ export default function Timer() {
     setSecondsLeft(0);
   };
 
+  const adjustMinutes = (delta: number) => {
+    setInputMinutes((minutes) => clampMinutes(minutes + delta));
+  };
+
+  const handleMinutesChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const next = Number.parseInt(event.target.value, 10);
+    setInputMinutes(Number.isNaN(next) ? MIN_MINUTES : clampMinutes(next));
+  };
+
   const progress = totalSeconds > 0 ? ((totalSeconds - secondsLeft) / totalSeconds) * 100 : 0;
+  const displaySeconds = state === 'idle' ? inputMinutes * 60 : secondsLeft;
+  const goalLabel = goal || 'Untitled session';
+  const isRunning = state === 'running';
+  const isPaused = state === 'paused';
+
+  const dialKicker =
+    state === 'idle'
+      ? 'Ready'
+      : state === 'running'
+        ? 'In focus'
+        : state === 'paused'
+          ? 'Paused'
+          : 'Complete';
 
   return (
-    <main className="flex-1 flex flex-col items-center justify-center px-4 space-y-6">
+    <main className="timer-stage">
+      <p className="visually-hidden" aria-live="polite">
+        {state === 'running'
+          ? 'Timer running'
+          : state === 'paused'
+            ? 'Timer paused'
+            : state === 'completed'
+              ? 'Session complete'
+              : ''}
+      </p>
+
+      <div
+        className={`dial${state === 'completed' ? ' is-complete' : ''}`}
+        style={{ '--progress': progress } as CSSProperties}
+      >
+        <div className="dial-ticks" aria-hidden="true" />
+        <div className="dial-track" aria-hidden="true" />
+        <div className="dial-face">
+          <p className="dial-kicker">{dialKicker}</p>
+          <p className="dial-time" role="timer" aria-label={`${formatTime(displaySeconds)} remaining`}>
+            {formatTime(displaySeconds)}
+          </p>
+          <p className="dial-goal">
+            {state === 'idle' ? `${inputMinutes} minute session` : goalLabel}
+          </p>
+        </div>
+      </div>
+
       {state === 'idle' && (
-        <>
-          <div className="w-full max-w-xs space-y-3">
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Goal</label>
-              <input
-                type="text"
-                value={goal}
-                onChange={(e) => setGoal(e.target.value)}
-                placeholder="e.g. Review Pull Requests"
-                className="w-full bg-gray-800 text-white rounded px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500 placeholder-gray-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm text-gray-400 mb-1">Duration (minutes)</label>
+        <form className="setup" onSubmit={handleStart}>
+          <label className="field">
+            <span className="field-label">What are you working on?</span>
+            <input
+              type="text"
+              value={goal}
+              onChange={(event) => setGoal(event.target.value)}
+              placeholder="e.g. Review pull requests"
+              maxLength={80}
+            />
+          </label>
+
+          <div className="duration-row">
+            <span className="field-label">Minutes</span>
+            <div className="stepper">
+              <button
+                type="button"
+                onClick={() => adjustMinutes(-5)}
+                aria-label="Decrease by five minutes"
+              >
+                −
+              </button>
               <input
                 type="number"
                 value={inputMinutes}
-                onChange={(e) => setInputMinutes(Math.max(1, parseInt(e.target.value) || 1))}
-                min={1}
-                className="w-full bg-gray-800 text-white rounded px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={handleMinutesChange}
+                min={MIN_MINUTES}
+                max={MAX_MINUTES}
+                aria-label="Session length in minutes"
               />
+              <button
+                type="button"
+                onClick={() => adjustMinutes(5)}
+                aria-label="Increase by five minutes"
+              >
+                +
+              </button>
             </div>
           </div>
 
-          <button
-            onClick={handleStart}
-            className="w-20 h-20 rounded-full bg-blue-600 hover:bg-blue-700 flex items-center justify-center transition-colors"
-          >
-            <svg className="w-8 h-8 ml-1" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z" />
-            </svg>
+          <button className="start-btn" type="submit">
+            Start focus
           </button>
-        </>
+        </form>
       )}
 
-      {state === 'running' && (
+      {(isRunning || isPaused) && (
         <>
-          <div className="text-center">
-            <p className="text-sm text-gray-400 mb-2">{goal || 'Untitled session'}</p>
-            <p className="text-6xl font-mono font-bold">{formatTime(secondsLeft)}</p>
-          </div>
-
-          <div className="w-full max-w-xs">
-            <div className="h-1 bg-gray-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-blue-500 transition-all duration-1000"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-4">
+          <div className="controls">
             <button
-              onClick={handlePause}
-              className="w-14 h-14 rounded-full bg-yellow-600 hover:bg-yellow-700 flex items-center justify-center transition-colors"
+              type="button"
+              className="control control-primary"
+              onClick={isRunning ? handlePause : handleResume}
             >
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-              </svg>
+              {isRunning ? 'Pause' : 'Resume'}
             </button>
-            <button
-              onClick={handleStop}
-              className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center transition-colors"
-            >
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M6 6h12v12H6z" />
-              </svg>
+            <button type="button" className="control control-danger" onClick={handleStop}>
+              Stop
             </button>
           </div>
-        </>
-      )}
-
-      {state === 'paused' && (
-        <>
-          <div className="text-center">
-            <p className="text-sm text-gray-400 mb-2">{goal || 'Untitled session'} — Paused</p>
-            <p className="text-6xl font-mono font-bold text-yellow-400">{formatTime(secondsLeft)}</p>
-          </div>
-
-          <div className="flex gap-4">
-            <button
-              onClick={handleResume}
-              className="w-14 h-14 rounded-full bg-green-600 hover:bg-green-700 flex items-center justify-center transition-colors"
-            >
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            </button>
-            <button
-              onClick={handleStop}
-              className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-700 flex items-center justify-center transition-colors"
-            >
-              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M6 6h12v12H6z" />
-              </svg>
-            </button>
-          </div>
+          <p className="session-note">
+            {formatTime(secondsLeft)} left of {formatTime(totalSeconds)}
+          </p>
         </>
       )}
 
       {state === 'completed' && (
         <>
-          <div className="text-center space-y-2">
-            <p className="text-4xl">🎉</p>
-            <p className="text-xl font-semibold">Session Complete!</p>
-            <p className="text-gray-400">{goal || 'Untitled session'}</p>
-            <p className="text-sm text-gray-500">
-              {formatTime(totalSeconds)} focused
-            </p>
+          <div className="controls">
+            <button type="button" className="start-btn" onClick={handleReset}>
+              New session
+            </button>
           </div>
-
-          <button
-            onClick={handleReset}
-            className="px-6 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors"
-          >
-            New Session
-          </button>
+          <p className="session-note">{formatTime(totalSeconds)} logged to your history.</p>
         </>
       )}
     </main>

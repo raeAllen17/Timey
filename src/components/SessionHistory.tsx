@@ -7,9 +7,12 @@ export default function SessionHistory() {
   const { user } = useAuth();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!user) return;
+
+    let cancelled = false;
 
     supabase
       .from('sessions')
@@ -17,10 +20,19 @@ export default function SessionHistory() {
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(50)
-      .then(({ data }) => {
-        setSessions(data ?? []);
+      .then(({ data, error: queryError }) => {
+        if (cancelled) return;
+        if (queryError) {
+          setError('History could not load. Try again in a moment.');
+        } else {
+          setSessions(data ?? []);
+        }
         setLoading(false);
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   const formatDuration = (seconds: number) => {
@@ -43,36 +55,37 @@ export default function SessionHistory() {
   };
 
   if (loading) {
+    return <p className="history-empty">Loading history</p>;
+  }
+
+  if (error) {
     return (
-      <div className="p-4 text-center text-gray-500">Loading history...</div>
+      <p className="history-empty" role="alert">
+        {error}
+      </p>
     );
   }
 
   if (sessions.length === 0) {
-    return (
-      <div className="p-4 text-center text-gray-500">No sessions yet. Start your first one!</div>
-    );
+    return <p className="history-empty">No sessions yet. Start your first one above.</p>;
   }
 
   return (
-    <div className="space-y-2">
-      {sessions.map((s) => (
-        <div
-          key={s.id}
-          className="bg-gray-800 rounded-lg px-4 py-3 flex items-center justify-between"
-        >
-          <div className="min-w-0 flex-1">
-            <p className="text-white font-medium truncate">{s.goal || 'Untitled session'}</p>
-            <p className="text-xs text-gray-400">{formatDate(s.created_at)}</p>
+    <ul className="history-list">
+      {sessions.map((session) => (
+        <li className="history-row" key={session.id}>
+          <div className="history-detail">
+            <p className="history-goal">{session.goal || 'Untitled session'}</p>
+            <p className="history-date">{formatDate(session.created_at)}</p>
           </div>
-          <div className="text-right ml-4 shrink-0">
-            <p className="text-sm font-mono text-gray-300">{formatDuration(s.actual_duration)}</p>
-            <p className={`text-xs ${s.completed ? 'text-green-400' : 'text-yellow-400'}`}>
-              {s.completed ? 'Completed' : 'Stopped'}
+          <div className="history-stats">
+            <p>{formatDuration(session.actual_duration)}</p>
+            <p className={`history-status ${session.completed ? 'is-complete' : 'is-stopped'}`}>
+              {session.completed ? 'Completed' : 'Stopped'}
             </p>
           </div>
-        </div>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
