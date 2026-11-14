@@ -27,6 +27,7 @@ function createWindow(): void {
     },
     title: 'Timey',
     show: false,
+    autoHideMenuBar: true,
     backgroundColor: '#f2f2ec',
   });
 
@@ -87,6 +88,7 @@ ipcMain.on('timey:notify', (_event, payload: { title: string; body: string }) =>
 });
 
 app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
   createWindow();
   createTray();
 
